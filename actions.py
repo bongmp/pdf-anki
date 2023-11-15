@@ -1,6 +1,7 @@
 # actions.py
 import json
 import os
+import fitz
 from openai import OpenAI
 import re
 import streamlit as st
@@ -188,4 +189,88 @@ You are receiving the text from one slide of a lecture. Use the following princi
             inner_text = inner_text.replace(match[1], inner_quotes_replaced)
 
         return inner_text
-          
+
+    def detect_rects(self, page):
+        # Credit for method to Jorj McKie (https://github.com/pymupdf/PyMuPDF-Utilities/blob/master/examples/extract-vector-graphics/separate-figures.py)
+        """Detect and join rectangles of connected vector graphics."""
+        # we need to exclude meaningless graphics that e.g. paint a white
+        # rectangle on the full page.
+        delta = (-1, -1, 1, 1)  # enlarge every path rect by this
+        parea = abs(page.rect) * 0.8  # area of the full page (80%)
+
+        # exclude graphics that are too large
+        paths = [p for p in page.get_drawings() if abs(p["rect"]) < parea]
+
+        # make a list of vector graphics rectangles (IRects are sufficient)
+        prects = sorted(
+            [(p["rect"] + delta).irect for p in paths], key=lambda r: (r.y1, r.x0)
+        )
+
+        new_rects = []  # the final list of the joined rectangles
+
+        # -------------------------------------------------------------------------
+        # The strategy is to identify and join all rects that have at least one
+        # point in common.
+        # -------------------------------------------------------------------------
+        while prects:  # the algorithm will empty this list
+            prects_len = len(prects)  # current list length
+            r = prects[0]  # first rectangle
+            repeat = True
+            while repeat:
+                for i in range(prects_len - 1, -1, -1):  # back to front
+                    if i == 0:  # don't touch first rectangle
+                        continue
+                    if r.intersects(prects[i]):
+                        r |= prects[i]  # join in to first rect
+                        prects[0] = +r  # copy to list item
+                        del prects[i]  # delete this rect
+                prects_len = len(prects)  # length may have changed
+
+                # This is true if remainings touch the updated first one.
+                # Otherwise the while ends.
+                repeat = any([r.intersects(prects[i]) for i in range(1, prects_len)])
+
+            # move first item over to result list
+            new_rects.append(prects.pop(0))
+            prects = sorted(list(set(prects)), key=lambda r: (r.y1, r.x0))
+
+        new_rects = sorted(list(set(new_rects)), key=lambda r: (r.y1, r.x0))
+        return [r for r in new_rects if r.width > 5 and r.height > 5]
+    
+    def recoverpix(self, doc, item):
+        # Credit for method to Jorj X. McKie (https://github.com/pymupdf/PyMuPDF-Utilities/blob/master/examples/extract-images/extract-from-pages.py)
+        xref = item[0]  # xref of PDF image
+        smask = item[1]  # xref of its /SMask
+
+        # special case: /SMask or /Mask exists
+        if smask > 0:
+            pix0 = fitz.Pixmap(doc.extract_image(xref)["image"])
+            if pix0.alpha:  # catch irregular situation
+                pix0 = fitz.Pixmap(pix0, 0)  # remove alpha channel
+            mask = fitz.Pixmap(doc.extract_image(smask)["image"])
+
+            try:
+                pix = fitz.Pixmap(pix0, mask)
+            except:  # fallback to original base image in case of problems
+                pix = fitz.Pixmap(doc.extract_image(xref)["image"])
+
+            # if the image has an alpha channel, create a new image without the alpha channel
+            if pix.alpha:
+                pix = fitz.Pixmap(pix, 0)
+
+            return {  # create dictionary expected by caller
+                "colorspace": pix.colorspace.n,
+                "image": pix.tobytes("jpg", jpg_quality=80),
+            }
+
+        # special case: /ColorSpace definition exists
+        # to be sure, we convert these cases to RGB PNG images
+        if "/ColorSpace" in doc.xref_object(xref, compressed=True):
+            pix = fitz.Pixmap(doc, xref)
+            pix = fitz.Pixmap(fitz.csRGB, pix)
+            return {  # create dictionary expected by caller
+                "ext": "png",
+                "colorspace": 3,
+                "image": pix.tobytes("jpg", jpg_quality=80),
+            }
+        return doc.extract_image(xref)

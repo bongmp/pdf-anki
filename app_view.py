@@ -1,17 +1,16 @@
 # AppView.py
-import io
 import json
 import streamlit as st
 import fitz
-from PIL import Image
 
 class AppView:
     def __init__(self, actions):
         self.actions = actions
 
     def display(self):
-        dev = False
+        dev = True
 
+        # TODO: Fix: Sometimes cards aren't added
         # TODO: Only do one check and then create button to check for Anki. Add button to refresh decks.
         if "no_ankiconnect" in st.session_state and st.session_state.no_ankiconnect == False:
             if "api_perms" not in st.session_state:
@@ -27,6 +26,7 @@ class AppView:
                 st.session_state['API_KEY'] = st.secrets.OPENAI_API_KEY
             else:
                 st.session_state['API_KEY'] = st.text_input("Enter OpenAI API key (Get one [here](https://platform.openai.com/account/api-keys))", type = "password")
+            # TODO: Determine language from file
             languages = ['English', 'Bengali', 'French', 'German', 'Hindi', 'Urdu', 'Mandarin Chinese', 'Polish', 'Portuguese', 'Spanish', 'Arabic']
             st.session_state["lang"] = st.selectbox("Returned language", languages, on_change=self.clear_data)
             col1, col2 = st.columns(2)
@@ -41,17 +41,73 @@ class AppView:
                 st.warning("Enter API key to remove limitations")
 
             file = st.file_uploader("Choose a file", type=["pdf"])
-            if file:                
-                st.session_state["file_name"] = file.name
-                doc = fitz.open("pdf", file.read())
-                if "page_count" not in st.session_state:
-                    st.session_state['page_count'] = len(doc)
+            if file:
+                with file:                
+                    st.session_state["file_name"] = file.name
+                    doc = fitz.open("pdf", file.read())
+                    if "page_count" not in st.session_state:
+                        st.session_state['page_count'] = len(doc)
 
-                if start > st.session_state['page_count']:
-                    st.warning("Start page out of range")
-                    range_good = False
-                else:
-                    range_good = True
+                    if start > st.session_state['page_count']:
+                        st.warning("Start page out of range")
+                        range_good = False
+                    else:
+                        range_good = True
+
+                    # Check if previews already exist
+                    if f"image_{st.session_state['page_count'] - 1}" not in st.session_state:
+                        xreflist = []
+
+                        # Load the PDF and its previews and extract text for each page
+                        for i, page in enumerate(doc):
+                            print("Extracting page #", i)
+                            pix = page.get_pixmap(dpi=100)
+                            img = pix.tobytes(output='jpg', jpg_quality=80)
+
+                            st.session_state['image_' + str(i)] = img
+                            st.session_state['text_' + str(i)] = page.get_text()
+
+                            # TODO: Remove images that appear on every slide (e.g. logos): https://github.com/pymupdf/PyMuPDF-Utilities/blob/master/examples/extract-images/extract-from-pages.py
+                            # TODO: Get background images and vector images: https://github.com/pymupdf/PyMuPDF-Utilities/blob/master/examples/extract-vector-graphics/separate-figures.py
+                            images = []
+                            dimlimit = 100  # each image side must be greater than this
+                            relsize = 0.05  # image : image size ratio must be larger than this (5%)
+                            abssize = 2048  # absolute image size limit 2 KB: ignore if smaller
+
+                            il = doc.get_page_images(i)
+                            for img in il:
+                                xref = img[0]
+                                if xref in xreflist:
+                                    continue
+                                xreflist.append(xref)
+                                width = img[2]
+                                height = img[3]
+                                if min(width, height) <= dimlimit:
+                                    continue
+                                image = self.actions.recoverpix(doc, img)
+                                n = image["colorspace"]
+                                imgdata = image["image"]
+
+                                if len(imgdata) <= abssize:
+                                    continue
+                                if len(imgdata) / (width * height * n) <= relsize:
+                                    continue
+
+                                images.append(imgdata)
+                            
+                            p = i
+                            new_rects = self.actions.detect_rects(page)
+                            mat = fitz.Matrix(3, 3)  # high resolution matrix
+                            for i, r in enumerate(new_rects):
+                                pix = page.get_pixmap(matrix=mat, clip=r)
+                                img = pix.tobytes(output='jpg', jpg_quality=80)
+                                images.append(img)
+                                
+                            st.session_state[f"images_{p}"] = images
+
+            else:
+                if "image_0" in st.session_state:
+                    self.clear_data()
 
             if "decks" in st.session_state:
                 st.selectbox(
@@ -78,22 +134,6 @@ class AppView:
     
         if range_good:
             if st.session_state["no_ankiconnect"] == False and "decks" in st.session_state or st.session_state["no_ankiconnect"] == True:
-                # Check if previews already exist
-                if 'image_0' not in st.session_state:
-                    # Load the PDF and its previews and extract text for each page
-                    for i, page in enumerate(doc):
-                        pix = page.get_pixmap(dpi=100)
-                        img = Image.frombytes("RGB", [pix.width, pix.height], pix.samples)
-
-                        with io.BytesIO() as buf:
-                            img.save(buf, format='JPEG', quality=80)
-                            byte_im = buf.getvalue()
-
-                            st.session_state['image_' + str(i)] = byte_im
-                            st.session_state['text_' + str(i)] = page.get_text()
-
-                    doc.close()
-
                 # Loop through the pages
                 for i in range(start - 1, start + num - 1):
                     if i == st.session_state['page_count']:
@@ -134,7 +174,7 @@ class AppView:
                                 p = i
                                 flashcards = json.loads(json.dumps(st.session_state['flashcards_' + str(i)]))
 
-                                if f"{i}_is_title" in st.session_state:
+                                if f"{i}_is_title" in st.session_state and st.session_state[f"{i}_is_title"] == True:
                                     flashcards = None
                                     st.info("No flashcards generated for this slide as it doesn't contain relevant information.")
 
@@ -155,7 +195,6 @@ class AppView:
                                     st.session_state["flashcards_" + str(i) + "_count"] = length
                                     st.session_state["flashcards_" + str(i) + "_to_add"] = length
 
-                                # TODO: Deal with cards that are returned with "no information"
                                 for i, flashcard in enumerate(flashcards):
                                     with tabs[i]:
                                         # TODO: Add option to modify a flashcard using GPT with a individual prompt/button
@@ -175,7 +214,7 @@ class AppView:
                                                 st.text_area(f"Back", value=flashcard["back"], key=f"back_{p, i}", disabled=False)
 
                                                 st.button("Disable flashcard", key=f"del_{p, i}", on_click=self.disable_flashcard, args=[p, i])
-                                        elif f"fc_active_{p, i}" in st.session_state and st.session_state[f"fc_active_{p, i}"] == False:                                        
+                                        elif f"fc_active_{p, i}" in st.session_state and st.session_state[f"fc_active_{p, i}"] == False:
                                             st.text_input(f"Front", value=flashcard["front"], key=f"front_{p, i}", disabled=True)
                                             st.text_area(f"Back", value=flashcard["back"], key=f"back_{p, i}", disabled=True)
 
@@ -198,12 +237,18 @@ class AppView:
                                     if "flashcards_" + str(p) + "_tags" not in st.session_state:
                                         st.session_state["flashcards_" + str(p) + "_tags"] = st.session_state["file_name"].replace(' ', '_').replace('.pdf', '') + "_page_" + str(p + 1)
                                     st.text_input("Tag:", value = st.session_state["flashcards_" + str(p) + "_tags"], key = f"tag_{str(p)}")
+
+                        if st.checkbox("Show images", key = f"show_images_{p}"):
+                            no_images = len(st.session_state[f"images_{p}"])
+                            cols = st.columns(no_images)
+                            for i, img in enumerate(st.session_state[f"images_{p}"]):
+                                with cols[i]:
+                                    st.markdown(f"**Image #{i}**")
+                                    st.image(img)
+                        
             else:
                 if "decks" not in st.session_state:
                     st.warning("Start Anki with AnkiConnect installed or tick checkbox to use without")
-        else:
-            if 'image_0' in st.session_state:
-                self.clear_data()
 
     def clear_data(self):
         for key in st.session_state.keys():
@@ -218,6 +263,10 @@ class AppView:
     def enable_flashcard(self, page, num):
         st.session_state[f"fc_active_{page, num}"] = True        
         st.session_state["flashcards_" + str(page) + "_to_add"] += 1
+
+    def add_card(self, page):
+        if f"{page}_is_title" in st.session_state:
+            st.session_state[f"{page}_is_title"] = False
 
     def prepare_and_add_flashcards_to_anki(self, page):
         prepared_flashcards = []

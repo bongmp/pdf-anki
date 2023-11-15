@@ -4,16 +4,13 @@
 
 PDF to Anki program using GPT3.5-turbo from OpenAI. Streamlit is the web-GUI. Shout-out to OpenAI and Streamlit for saving me a ton of work!
 
-Version 0.51 alpha (Not perfect, but usable).
-
 ## Requirements:
 
 - An OpenAI API key
 - Anki running with AnkiConnect installed (Addon #: 2055492159)
 
 *If compiling to run locally:*
-- An OpenAI key
-    - Needs to be added as OPENAI_API_KEY="[Key here]" in .streamlit\secrets.toml
+- OpenAI needs to be added as OPENAI_API_KEY="[Key here]" in .streamlit\secrets.toml
 
 ## Usage:
 
