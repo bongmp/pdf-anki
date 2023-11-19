@@ -65,7 +65,7 @@ class AppView:
                             img = pix.tobytes(output='jpg', jpg_quality=80)
 
                             st.session_state['image_' + str(i)] = img
-                            st.session_state['text_' + str(i)] = page.get_text()
+                            st.session_state['text_' + str(i)] = page.get_text(sort = True)
 
                             # TODO: Remove images that appear on every slide (e.g. logos): https://github.com/pymupdf/PyMuPDF-Utilities/blob/master/examples/extract-images/extract-from-pages.py
                             # TODO: Get background images and vector images: https://github.com/pymupdf/PyMuPDF-Utilities/blob/master/examples/extract-vector-graphics/separate-figures.py
