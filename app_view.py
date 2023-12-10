@@ -13,12 +13,14 @@ class AppView:
         self.actions = actions
 
     def display(self):
-        dev = False
+        dev = True
 
+        # TODO: Check if GPT-4 is available and if openai account has enough credits
         if "no_ankiconnect" in st.session_state and st.session_state.no_ankiconnect == False:
             if "api_perms" not in st.session_state:
                 self.actions.check_API()
-        
+                self.actions.get_os()
+
         col1, col2 = st.columns([0.78, 0.22], gap = "large")
         with col1:            
             st.markdown("[Buy Me A Coffee](https://www.buymeacoffee.com/benno094) to support development of the site or let us know what you think [here](mailto:pdf.to.anki@gmail.com).")
@@ -26,6 +28,10 @@ class AppView:
             st.markdown("**Disclaimer:** Use at your own risk.")
 
         with st.sidebar:
+            if "os_type" in st.session_state:
+                os_type = st.session_state['os_type'].lower()
+                if 'ios' in os_type or 'ipad' in os_type or 'android' in os_type:
+                    st.session_state["api_perms"] = "mobile"
             st.markdown("Easily create and import flashcards directly into Anki with PDF-Anki -- powered by GPT3.5-turbo from OpenAI.")
             badge(type="twitter", name="PDFToAnki")
             api_key = st.empty()

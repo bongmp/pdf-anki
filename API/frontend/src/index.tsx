@@ -145,6 +145,27 @@ async function getDecks() {
   }
 }
 
+// Returns users decks on mobile
+async function getDecksMobile() {
+  try {
+    window.location.href = 'anki://x-callback-url/infoForAdding?x-success=...';
+  } catch (error) {
+    return false;
+  }
+}
+
+async function handleClipboard() {
+  try {
+    const clipText = await navigator.clipboard.readText();
+    console.log('Clipboard content:', clipText); 
+    await navigator.clipboard.writeText('');
+    console.log('Clipboard cleared');
+    return clipText
+  } catch (err) {
+    console.error('Failed to handle clipboard contents:', err);
+  }
+}
+
 /**
  * The component's render function. This will be called immediately after
  * the component is initially loaded, and then again every time the
@@ -182,6 +203,15 @@ async function onRender(event: Event): Promise<void> {
       case "getDecks":
         const decks = await getDecks();
         Streamlit.setComponentValue(decks)
+        break;
+      case "getDecksMobile":
+        await getDecksMobile();
+        const decksMob = await handleClipboard();
+        Streamlit.setComponentValue(decksMob)
+        break;
+      case "getOs":
+        let platform: string = window.navigator.userAgent;
+        Streamlit.setComponentValue(platform)
         break;
     }
   } catch (error) {
