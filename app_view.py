@@ -31,7 +31,7 @@ class AppView:
             if "os_type" in st.session_state:
                 st.write(st.session_state['os_type']) 
                 os_type = st.session_state['os_type'].lower()
-                if 'ios' in os_type or 'ipad' in os_type or 'android' in os_type:
+                if 'ios' in os_type or 'ipad' in os_type or 'android' in os_type or 'mac os' in os_type:
                     st.session_state["api_perms"] = "mobile"
             st.markdown("Easily create and import flashcards directly into Anki with PDF-Anki -- powered by GPT3.5-turbo from OpenAI.")
             badge(type="twitter", name="PDFToAnki")
