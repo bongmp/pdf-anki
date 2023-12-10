@@ -36,10 +36,10 @@ class Actions:
             st.session_state['os_type'] = response
 
     def get_decks(self, key=None):
-        if "api_perms" in st.session_state and st.session_state["api_perms"] == "mobile":
-            decks = API(action="getDecksMobile", key=key)
-        else:
-            decks = API(action="getDecks", key=key)
+        # if "api_perms" in st.session_state and st.session_state["api_perms"] == "mobile":
+        decks = API(action="getDecksMobile", key=key)
+        # else:
+        #     decks = API(action="getDecks", key=key)
         if decks is not False and decks is not None:
             st.session_state['decks'] = decks
 
