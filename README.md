@@ -12,6 +12,7 @@ PDF to Anki program using GPT3.5-turbo from OpenAI. Streamlit is the web-GUI. Sh
 *If compiling to run locally:*
 - An OpenAI key can be added as OPENAI_API_KEY="[Key here]" in .streamlit\secrets.toml
 
+
 ## Usage:
 
 1. Add an OpenAI API key.
