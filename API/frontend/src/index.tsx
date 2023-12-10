@@ -148,7 +148,7 @@ async function getDecks() {
 // Returns users decks on mobile
 async function getDecksMobile() {
   try {
-    window.location.assign('anki://x-callback-url/infoForAdding?x-success=...');
+    location.assign('anki://x-callback-url/infoForAdding?x-success=...');
   } catch (error) {
     return false;
   }
