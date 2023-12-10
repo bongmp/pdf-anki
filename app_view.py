@@ -28,8 +28,9 @@ class AppView:
             st.markdown("**Disclaimer:** Use at your own risk.")
 
         with st.sidebar:
+            if "api_perms" in st.session_state and st.session_state["api-perms"] == "mobile":
+                st.write("On mobile device")
             if "os_type" in st.session_state:
-                st.write(st.session_state['os_type']) 
                 os_type = st.session_state['os_type'].lower()
                 if 'ios' in os_type or 'ipad' in os_type or 'android' in os_type or 'mac os' in os_type:
                     st.session_state["api_perms"] = "mobile"
